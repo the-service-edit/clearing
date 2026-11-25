@@ -66,7 +66,7 @@
   const blank = () => ({
     schema: 1, createdAt: Date.now(), updatedAt: Date.now(), profile: null,
     settings: { theme: "auto", readAhead: false, reminders: { morning: "07:30", evening: "20:30" } },
-    days: {}, status: {}, checkins: {}, drinks: [], cravings: [], journal: [], beliefs: {}, beliefNotes: {}, lists: {}, kept: {},
+    days: {}, photos: {}, status: {}, checkins: {}, drinks: [], cravings: [], journal: [], beliefs: {}, beliefNotes: {}, lists: {}, kept: {},
     future: { letter: null, reasons: [], feel: { words: [], text: "" } },
     next: { choice: null, rules: { days: 2, perDay: 2, skip: "" }, extendedTo: 30, goals: [], finalAt: null },
   });
@@ -85,6 +85,47 @@
     save() { clearTimeout(this.t); this.d.updatedAt = Date.now(); this.ok = this.adapter.write(this.d); },
     soon() { clearTimeout(this.t); this.t = setTimeout(() => this.save(), 350); },
   };
+
+  /* ---------------- photos ----------------
+     Daily photos live in IndexedDB on this device (too big for localStorage).
+     S.d.photos keeps a small index { date: { ts, day } } so views can render synchronously. */
+  const PhotoDB = {
+    p: null,
+    open() { if (!this.p) this.p = new Promise((res, rej) => { try { const r = indexedDB.open("clearing-photos", 1); r.onupgradeneeded = () => r.result.createObjectStore("photos", { keyPath: "date" }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); return this.p; },
+    async run(mode, fn) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction("photos", mode); const st = t.objectStore("photos"); const q = fn(st); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }); },
+    put(rec) { return this.run("readwrite", (s) => s.put(rec)); },
+    get(date) { return this.run("readonly", (s) => s.get(date)); },
+    all() { return this.run("readonly", (s) => s.getAll()); },
+    del(date) { return this.run("readwrite", (s) => s.delete(date)); },
+    clear() { return this.run("readwrite", (s) => s.clear()); },
+  };
+  const urlCache = new Map();
+  async function photoURL(date) { if (urlCache.has(date)) return urlCache.get(date); const r = await PhotoDB.get(date); if (!r || !r.blob) return null; const u = URL.createObjectURL(r.blob); urlCache.set(date, u); return u; }
+  function forgetURL(date) { if (urlCache.has(date)) { URL.revokeObjectURL(urlCache.get(date)); urlCache.delete(date); } }
+  function hydratePhotos(root = document) { $$("[data-photo]", root).forEach(async (el) => { try { const u = await photoURL(el.dataset.photo); if (u) el.src = u; } catch (e) {} }); }
+  async function compressImage(file) {
+    const url = URL.createObjectURL(file); const img = new Image(); img.src = url;
+    try { await img.decode(); } catch (e) { URL.revokeObjectURL(url); throw e; }
+    const max = 1280, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.82)); if (!blob) throw new Error("encode");
+    return { blob, w: c.width, h: c.height };
+  }
+  async function savePhoto(date, file) {
+    toast("Saving your photo…");
+    try {
+      const { blob, w, h } = await compressImage(file);
+      await PhotoDB.put({ date, blob, w, h, ts: Date.now() });
+      S.d.photos[date] = { ts: Date.now(), day: P().startDate ? diff(P().startDate, date) + 1 : null }; S.save(); forgetURL(date);
+      try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+      closeDialog(); toast("Photo saved"); render();
+    } catch (e) { toast(window.indexedDB ? "Couldn’t read that photo. Try a JPEG or PNG." : "Photos can’t be saved in this browser. Use the installed app."); }
+  }
+  const blobToDataURL = (b) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+  const photoDates = () => Object.keys(S.d.photos || {}).sort();
+  const photoInput = (date) => `<input type="file" accept="image/*" class="sr" data-act-change="photo" data-date="${date}">`;
+  let photoCmp = { a: null, b: null, mode: "slide" };
 
   /* ---------------- domain ---------------- */
   const P = () => S.d.profile || {};
@@ -285,7 +326,9 @@
   function scope(id, obj, change) { scopes[id] = { obj, change }; return `data-scope="${id}"`; }
   function scopeOf(el) { const s = el.closest("[data-scope]"); return s ? scopes[s.dataset.scope] : null; }
   document.addEventListener("input", (e) => {
-    const el = e.target; if (!el.dataset || !el.dataset.k) return; const sc = scopeOf(el); if (!sc) return;
+    const el = e.target;
+    if (el.dataset && el.dataset.ba) { const ba = el.parentElement.querySelector(".ba"); if (ba) ba.style.setProperty("--pos", el.value + "%"); el.style.setProperty("--p", el.value + "%"); return; }
+    if (!el.dataset || !el.dataset.k) return; const sc = scopeOf(el); if (!sc) return;
     let v = el.value; if (el.dataset.num || el.type === "range") v = el.value === "" ? null : Number(el.value);
     setP(sc.obj, el.dataset.k, v);
     if (el.type === "range") { const mn = +el.min || 0, mx = +el.max || 100; el.style.setProperty("--p", ((v - mn) / (mx - mn)) * 100 + "%"); const o = el.closest(".slider") && el.closest(".slider").querySelector("output"); if (o) o.textContent = v; }
@@ -501,6 +544,11 @@
       <div class="side"><div class="top"><button data-act="go" data-to="you">${ic.user}<span>You</span></button></div><h1 class="greet">${greet()}</h1><div class="cta">${cta}</div></div></section>`;
   }
   function gardenCard(n) { const up = Math.min(Math.max(n, 0), 30); return `<section class="gardencard"><span class="label">Your garden · ${up} of 30 planted</span>${garden({ upto: up, st: dayStatuses(), label: gardenLabel(up) })}</section>`; }
+  function photoCard(n) {
+    const d = today(); const has = S.d.photos && S.d.photos[d]; const count = photoDates().length;
+    if (has) return `<section class="section photocard"><div class="pc-row"><img class="thumb" data-photo="${d}" alt="Your photo for today"><div><span class="label" style="margin-bottom:4px">Today’s photo</span><p class="small" style="margin:0 0 6px">Saved for day ${n}. ${count > 1 ? `You have ${count} photos so far.` : "Add one tomorrow to start comparing."}</p><div class="row" style="gap:14px"><a class="link" href="#photos">${count > 1 ? "Compare" : "Your photos"}</a><label class="link quiet" style="cursor:pointer">Replace${photoInput(d)}</label></div></div></div></section>`;
+    return `<section class="section photocard"><span class="label">Today’s photo</span><p class="small" style="margin-bottom:16px">One photo a day, same spot, same light. In a few weeks you’ll see the difference for yourself.</p><div class="row"><label class="btn" style="cursor:pointer">Add today’s photo${photoInput(d)}</label>${count ? `<a class="link quiet" href="#photos">See all</a>` : ""}</div></section>`;
+  }
   const promo = () => `<button class="promo" data-act="crave"><b>Having a craving?</b><span>Let’s ride it out together</span><em>Start ${ic.arrow.replace("<svg", '<svg width="18" height="18"')}</em></button>`;
   const toolsRow = () => `<div class="tools"><button data-act="drink">${ic.glass}Log a drink</button><button data-act="entry">${ic.pen}Write</button><button data-act="go" data-to="resources">${ic.user}Support</button></div>`;
 
@@ -513,7 +561,7 @@
     if (n > 30) return vPractice(n);
     const d = DAYS[n - 1]; const dd = dayData(n); const pn = personal(d);
     const cta = !mDone(n) ? `<button class="btn" data-act="morning" data-n="${n}">Open day</button>` : `<span class="done">${ic.check} Morning done</span>`;
-    let h = mast(n, `Day ${n} of 30 · ${d.phase}`, "", cta) + promo() + gardenCard(n);
+    let h = mast(n, `Day ${n} of 30 · ${d.phase}`, "", cta) + promo() + photoCard(n) + gardenCard(n);
     if (!mDone(n)) {
       h += `<section class="section"><span class="label">Today’s lesson</span><h2>${d.title}</h2><p class="lede" style="margin-bottom:6px">${esc(d.kicker)}</p><p class="small" style="margin:0">Check-in, intention, a short lesson and today’s experiment. About eight minutes.</p></section>`;
     } else {
@@ -700,7 +748,9 @@
     if (!P().startDate || curDay() < 1) return `<div class="page-head"><h1>Insights</h1><p>Insights appear once your experiment has started and you’ve logged a few days.</p></div>`;
     const g = gains(); const cr = S.d.cravings; const crA = cr.filter((c) => c.after != null);
     const up = Math.min(curDay(), 30);
+    const pd = photoDates();
     let h = `<div class="page-head"><h1>What your data says</h1><p>Everything here comes from what you’ve recorded. Estimates are labelled as estimates.</p></div>
+      <a class="section photolink" href="#photos"><div class="pl-thumbs">${pd.length ? [pd[0], pd[pd.length - 1]].filter((x, i, a) => a.indexOf(x) === i).map((d) => `<img data-photo="${d}" alt="">`).join("") : `<span class="pl-empty">+</span>`}</div><div><span class="label" style="margin:0">Your photos</span><p style="margin:2px 0 0;font-size:17px">${pd.length >= 2 ? `Day ${S.d.photos[pd[0]].day} and day ${S.d.photos[pd[pd.length - 1]].day}, side by side` : pd.length ? "One photo so far" : "Add a photo each day to see the change"}</p></div></a>
       <div class="stats"><div class="stat"><div class="v num">${g.af}</div><div class="l">alcohol-free days, of ${g.logged} logged</div></div>
       <div class="stat"><div class="v num">${P().weeklySpend ? money(g.saved) : "–"}</div><div class="l">${P().weeklySpend ? "estimated not spent" : "add your usual spend in You to estimate savings"}</div></div>
       <div class="stat"><div class="v num">${cr.length}</div><div class="l">cravings logged${cr.length ? `, ${cr.filter((c) => c.outcome === "passed" || c.outcome === "quieter").length} passed or eased` : ""}</div></div>
@@ -828,6 +878,31 @@
     return lines.join("\n");
   }
 
+  /* Photos */
+  VIEWS.photos = () => {
+    let h = `<div class="page-head"><a class="link quiet" href="#insights">← Insights</a><h1 style="margin-top:12px">Your photos</h1><p>Same spot, same light, roughly the same time each day. Your photos stay on this device.</p></div>`;
+    if (!P().startDate || curDay() < 1) return h + `<section class="section"><p class="small" style="margin:0">Photos start with day 1 of your experiment.</p></section>`;
+    const pd = photoDates(); const n = Math.min(curDay(), maxDay());
+    if (!pd.includes(photoCmp.a)) photoCmp.a = pd[0] || null;
+    if (!pd.includes(photoCmp.b) || photoCmp.b === photoCmp.a) photoCmp.b = pd.length > 1 ? pd[pd.length - 1] : null;
+    const dl = (d) => `Day ${S.d.photos[d].day || diff(P().startDate, d) + 1}`;
+    if (pd.length >= 2 && photoCmp.a && photoCmp.b) {
+      const [a, b] = photoCmp.a < photoCmp.b ? [photoCmp.a, photoCmp.b] : [photoCmp.b, photoCmp.a];
+      h += `<section class="section white"><div class="row between" style="margin-bottom:14px"><span class="label" style="margin:0">Compare</span><div class="seg mini" role="radiogroup" aria-label="Compare style"><a href="#photos" role="radio" aria-checked="${photoCmp.mode === "slide"}" ${photoCmp.mode === "slide" ? 'aria-current="page"' : ""} data-act="cmp-mode" data-v="slide">Slide</a><a href="#photos" role="radio" aria-checked="${photoCmp.mode === "side"}" ${photoCmp.mode === "side" ? 'aria-current="page"' : ""} data-act="cmp-mode" data-v="side">Side by side</a></div></div>`;
+      h += photoCmp.mode === "slide"
+        ? `<div class="ba" style="--pos:50%"><img class="ba-after" data-photo="${b}" alt="${dl(b)}"><img class="ba-before" data-photo="${a}" alt="${dl(a)}"><span class="ba-handle" aria-hidden="true"></span><span class="ba-tag l">${dl(a)}</span><span class="ba-tag r">${dl(b)}</span></div><input type="range" min="0" max="100" value="50" data-ba="1" aria-label="Slide between ${dl(a)} and ${dl(b)}" style="--p:50%;margin-top:10px">`
+        : `<div class="sbs"><figure><img data-photo="${a}" alt="${dl(a)}"><figcaption>${dl(a)} · ${fmtShort(a)}</figcaption></figure><figure><img data-photo="${b}" alt="${dl(b)}"><figcaption>${dl(b)} · ${fmtShort(b)}</figcaption></figure></div>`;
+      h += `<div class="field" style="margin:18px 0 10px"><span class="q">Before</span><div class="chips scrollrow">${pd.map((d) => `<button class="chip" role="radio" aria-checked="${d === photoCmp.a}" data-act="cmp-a" data-v="${d}">${dl(d)}</button>`).join("")}</div></div>
+        <div class="field" style="margin:0"><span class="q">After</span><div class="chips scrollrow">${pd.map((d) => `<button class="chip" role="radio" aria-checked="${d === photoCmp.b}" data-act="cmp-b" data-v="${d}">${dl(d)}</button>`).join("")}</div></div></section>`;
+    } else h += `<section class="section"><p class="small" style="margin:0">${pd.length ? "One photo saved. Add another on a different day and you can compare them here." : "No photos yet. Tap a day below, or add today’s from the Today screen."}</p></section>`;
+    let g = "";
+    for (let i = 1; i <= n; i++) { const d = dateOf(i); const has = S.d.photos[d];
+      g += has ? `<button class="ptile" data-act="photo-open" data-date="${d}" aria-label="Day ${i} photo"><img data-photo="${d}" alt=""><span>Day ${i}</span></button>`
+        : `<label class="ptile empty" aria-label="Add a photo for day ${i}"><b aria-hidden="true">+</b><span>Day ${i}</span>${photoInput(d)}</label>`; }
+    h += `<section class="section"><span class="label">Every day</span><div class="pgrid">${g}</div><p class="small" style="margin:16px 0 0">Photos are saved only in this browser on this device. Use the installed app so your phone keeps them, and include photos when you download your data.</p></section>`;
+    return h;
+  };
+
   /* You / settings */
   VIEWS.you = () => {
     const p = P(); const s = S.d.settings;
@@ -842,7 +917,7 @@
       <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">${inp("morning", s.reminders.morning, "Morning", "", "time")}${inp("evening", s.reminders.evening, "Evening", "", "time")}</div><button class="btn ghost" data-act="ics">Add to my calendar</button></section>`;
     h += `<section class="section"><span class="label">Preferences</span>
       <div class="setrow"><div><b>Read ahead</b><div class="d">Open future days early. Most people find the daily pace works better.</div></div><button class="toggle" role="switch" aria-checked="${s.readAhead}" aria-label="Read ahead" data-act="readahead"></button></div></section>`;
-    h += `<section class="section"><span class="label">Your data</span><h3>How your data is stored</h3><p class="small">Everything you enter, including your journal, stays in this browser on this device (about ${size} KB). Nothing is sent to a server, there are no accounts and no analytics. That also means clearing your browser data, or using another device, won’t carry it across. Export a copy now and then to keep it safe.${S.ok ? "" : " <b>Your browser is blocking storage right now, so data will be lost when you close this page. Export before leaving.</b>"}</p>
+    h += `<section class="section"><span class="label">Your data</span><h3>How your data is stored</h3><p class="small">Everything you enter, including your journal, stays in this browser on this device (about ${size} KB). Nothing is sent to a server, there are no accounts and no analytics. That also means clearing your browser data, or using another device, won’t carry it across. Daily photos are kept in this browser’s own storage on this device. Export a copy now and then to keep it all safe; downloads include your photos.${S.ok ? "" : " <b>Your browser is blocking storage right now, so data will be lost when you close this page. Export before leaving.</b>"}</p>
       <div class="row" style="margin-top:12px"><button class="btn ghost" data-act="export">Download my data</button><button class="link" data-act="export-copy">Copy my data</button><label class="link" style="display:inline-flex;align-items:center;cursor:pointer">Import<input type="file" accept="application/json,.json" data-act-change="import" class="sr"></label></div>
       <div class="row" style="margin-top:6px"><a class="link" href="#report">Printable report</a></div>
       <div class="setrow" style="margin-top:16px;border-top:1px solid var(--rule2)"><div><b>Delete everything</b><div class="d">Permanently removes all your data from this device.</div></div><button class="btn ghost" data-act="wipe" style="color:var(--clay);border-color:var(--clay)">Delete</button></div></section>`;
@@ -1132,11 +1207,19 @@
     print: () => { try { window.print(); } catch (e) { toast("Printing isn’t available here"); } },
     "report-dl": () => download(`clearing-report-${today()}.html`, "text/html", `<!DOCTYPE html><html lang="en-AU"><head><meta charset="utf-8"><title>Clearing report</title><style>body{font:16px/1.6 Georgia,serif;max-width:680px;margin:40px auto;padding:0 20px;color:#2a2019}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}.r{text-align:right}.noprint{display:none}.small{color:#666;font-size:14px}</style></head><body>${$(".report").innerHTML}</body></html>`),
     "report-copy": () => copyText(reportText()),
-    export: () => download(`clearing-data-${today()}.json`, "application/json", JSON.stringify(S.d, null, 2)),
+    export: async () => { const data = clone(S.d); try { const all = await PhotoDB.all(); if (all && all.length) { toast("Packing your photos…"); data.photosData = await Promise.all(all.map(async (r) => ({ date: r.date, w: r.w, h: r.h, ts: r.ts, data: await blobToDataURL(r.blob) }))); } } catch (e) {} download(`clearing-data-${today()}.json`, "application/json", JSON.stringify(data)); },
+    "cmp-mode": (b) => { photoCmp.mode = b.dataset.v; render(); },
+    "cmp-a": (b) => { photoCmp.a = b.dataset.v; if (photoCmp.b === b.dataset.v) photoCmp.b = null; render(); },
+    "cmp-b": (b) => { photoCmp.b = b.dataset.v; if (photoCmp.a === b.dataset.v) photoCmp.a = null; render(); },
+    "photo-open": (b) => { const d = b.dataset.date; const day = S.d.photos[d] && S.d.photos[d].day;
+      dialog({ title: `Day ${day || ""}`, body: `<img class="pbig" data-photo="${d}" alt="Your photo for day ${day}"><p class="small" style="margin:10px 0 0">${fmtLong(d)} · <label class="link" style="cursor:pointer">Replace${photoInput(d)}</label></p>`, actions: [
+        { label: "Delete", act: () => { setTimeout(() => dialog({ title: "Delete this photo?", body: "<p>It will be removed from this device. This can’t be undone.</p>", actions: [{ label: "Cancel" }, { label: "Delete", primary: true, clay: true, act: async () => { try { await PhotoDB.del(d); } catch (e) {} delete S.d.photos[d]; forgetURL(d); S.save(); toast("Photo deleted"); render(); } }] }), 30); } },
+        { label: "Compare from here", primary: true, act: () => { photoCmp.a = d; if (photoCmp.b === d) photoCmp.b = null; location.hash = "#photos"; render(); } }] });
+      hydratePhotos($("#dlg")); },
     "export-copy": () => copyText(JSON.stringify(S.d)),
     ics: () => download("clearing-reminders.ics", "text/calendar", buildICS()),
     install: async () => { if (!deferredInstall) return; deferredInstall.prompt(); try { await deferredInstall.userChoice; } catch (e) {} deferredInstall = null; render(); },
-    wipe: () => dialog({ title: "Delete everything?", body: `<p>This permanently removes your profile, journal, check-ins and records from this device. Consider downloading your data first.</p><div class="field"><label for="wipec">Type DELETE to confirm</label><input id="wipec" type="text" autocomplete="off"></div>`, actions: [{ label: "Cancel" }, { label: "Delete everything", primary: true, clay: true, act: (d) => { if ($("#wipec", d).value.trim().toUpperCase() !== "DELETE") { $("#wipec", d).focus(); toast("Type DELETE to confirm"); return false; } S.adapter.clear(); S.d = blank(); S.save(); S.adapter.clear(); S.d = blank(); toast("All data deleted"); location.hash = "#today"; render(); } }] }),
+    wipe: () => dialog({ title: "Delete everything?", body: `<p>This permanently removes your profile, journal, check-ins and records from this device. Consider downloading your data first.</p><div class="field"><label for="wipec">Type DELETE to confirm</label><input id="wipec" type="text" autocomplete="off"></div>`, actions: [{ label: "Cancel" }, { label: "Delete everything", primary: true, clay: true, act: (d) => { if ($("#wipec", d).value.trim().toUpperCase() !== "DELETE") { $("#wipec", d).focus(); toast("Type DELETE to confirm"); return false; } S.adapter.clear(); S.d = blank(); S.save(); S.adapter.clear(); S.d = blank(); PhotoDB.clear().catch(() => {}); urlCache.forEach((u) => URL.revokeObjectURL(u)); urlCache.clear(); toast("All data deleted"); location.hash = "#today"; render(); } }] }),
   };
   function rerender(b) { if (b.closest("#flow")) renderFlow(true); else { const y = window.scrollY; render(); window.scrollTo(0, y); } }
   document.addEventListener("click", (e) => {
@@ -1150,10 +1233,11 @@
   document.addEventListener("change", (e) => {
     const el = e.target; const a = el.dataset && el.dataset.actChange; if (!a) return;
     if (a === "age" && flow) flow.state.age = el.checked;
+    if (a === "photo" && el.files && el.files[0]) { savePhoto(el.dataset.date, el.files[0]); el.value = ""; return; }
     if (a === "import" && el.files && el.files[0]) {
       const f = el.files[0]; const r = new FileReader();
-      r.onload = () => { let data; try { data = migrate(JSON.parse(r.result)); } catch (x) { data = null; } if (!data) { toast("That file doesn’t look like a Clearing backup"); return; }
-        dialog({ title: "Restore this backup?", body: `<p>This replaces everything currently on this device with the backup${data.profile && data.profile.name ? ` for ${esc(data.profile.name)}` : ""}.</p>`, actions: [{ label: "Cancel" }, { label: "Restore", primary: true, act: () => { S.d = data; S.save(); if (flow) closeFlow(true); toast("Backup restored"); location.hash = "#today"; render(); } }] }); };
+      r.onload = () => { let data; try { data = migrate(JSON.parse(r.result)); } catch (x) { data = null; } if (!data) { toast("That file doesn’t look like a Clearing backup"); return; } const photosData = data.photosData; delete data.photosData;
+        dialog({ title: "Restore this backup?", body: `<p>This replaces everything currently on this device with the backup${data.profile && data.profile.name ? ` for ${esc(data.profile.name)}` : ""}.</p>`, actions: [{ label: "Cancel" }, { label: "Restore", primary: true, act: async () => { S.d = data; S.save(); if (photosData && photosData.length) { try { for (const p of photosData) { const blob = await (await fetch(p.data)).blob(); await PhotoDB.put({ date: p.date, blob, w: p.w, h: p.h, ts: p.ts }); forgetURL(p.date); } } catch (e) { toast("Some photos couldn’t be restored"); } } if (flow) closeFlow(true); toast("Backup restored"); location.hash = "#today"; render(); } }] }); };
       r.readAsText(f); el.value = "";
     }
   });
@@ -1172,14 +1256,14 @@
   function route() { const h = (location.hash || "#today").slice(1); return h || "today"; }
   function render() {
     const r = route(); const main = $("#main"); const nav = $("#nav");
-    const sect = r.startsWith("day-") ? "days" : r.startsWith("belief") ? "beliefs" : r === "future" ? "journal" : ["report"].includes(r) ? "insights" : r;
+    const sect = r.startsWith("day-") ? "days" : r.startsWith("belief") ? "beliefs" : r === "future" ? "journal" : ["report", "photos"].includes(r) ? "insights" : r;
     nav.innerHTML = `<span class="brand">Clearing</span>` + NAV.map(([id, l, i]) => `<a href="#${id}" ${sect === id ? 'aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("") + `<a href="#you" class="wide" ${["you", "resources", "about"].includes(r) ? 'aria-current="page"' : ""}>${ic.user}<span>You</span></a>`;
     let html;
     if (r.startsWith("day-")) html = vDay(+r.slice(4));
     else if (r.startsWith("belief-")) html = vBelief(r.slice(7));
     else html = (VIEWS[r] || VIEWS.today)();
     main.innerHTML = html;
-    drawCharts();
+    drawCharts(); hydratePhotos(main);
     $(".crave-fab").hidden = (!P().startDate && !P().onboardedAt) || r === "today";
     if (!S.d.profile && !flow) onboarding();
   }

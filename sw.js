@@ -1,5 +1,5 @@
 /* Clearing service worker: offline app shell + cached fonts. Bump VERSION when files change. */
-const VERSION = "clearing-v2.1.0";
+const VERSION = "clearing-v2.2.0";
 const FONTS = "clearing-fonts-v1";
 const SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./content.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./img/bg.jpg", "./img/bg-wide.jpg"];
 
