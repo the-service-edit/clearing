@@ -174,21 +174,21 @@
   function garden({ upto = 0, st = [], newBloom = -1, label = "", cls = "garden" } = {}) {
     const id = "gd" + uid();
     let s = `<svg viewBox="0 0 400 200" class="${cls}" role="img" aria-label="${esc(label)}"><defs>
-      <pattern id="${id}b" width="18" height="12" patternUnits="userSpaceOnUse"><rect width="18" height="12" fill="#eab1b7"/><path d="M0 5.7H18M0 11.7H18M0.4 0V5.7M9.4 6V11.7" stroke="#f6d6da" stroke-width=".6" opacity=".7"/></pattern>
+      <pattern id="${id}b" width="18" height="12" patternUnits="userSpaceOnUse"><rect width="18" height="12" fill="#f4d6d9"/><path d="M0 5.7H18M0 11.7H18M0.4 0V5.7M9.4 6V11.7" stroke="#fbeaec" stroke-width=".6" opacity=".9"/></pattern>
       <linearGradient id="${id}c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f2ee"/><stop offset="1" stop-color="#e7ddd6"/></linearGradient>
       <linearGradient id="${id}w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a2a3a" stop-opacity="0"/><stop offset="1" stop-color="#7a2a3a" stop-opacity=".12"/></linearGradient></defs>`;
     // gum canopy
-    s += `<g fill="#f3c7cc"><circle cx="356" cy="50" r="40"/><circle cx="398" cy="66" r="40"/><circle cx="318" cy="78" r="26"/><circle cx="280" cy="76" r="16"/><circle cx="384" cy="30" r="24"/></g><g fill="#fbe0e3" opacity=".9"><circle cx="346" cy="40" r="16"/><circle cx="388" cy="52" r="13"/><circle cx="310" cy="72" r="10"/></g><rect x="371" y="70" width="9" height="80" fill="#c99a96"/>`;
+    s += `<g fill="#f6dadd"><circle cx="356" cy="50" r="40"/><circle cx="398" cy="66" r="40"/><circle cx="318" cy="78" r="26"/><circle cx="280" cy="76" r="16"/><circle cx="384" cy="30" r="24"/></g><g fill="#fbe0e3" opacity=".9"><circle cx="346" cy="40" r="16"/><circle cx="388" cy="52" r="13"/><circle cx="310" cy="72" r="10"/></g><rect x="371" y="70" width="9" height="80" fill="#c99a96"/>`;
     // brick wall, stepped like the photo
     s += `<path d="M64 74H290V90H402V150H64Z" fill="url(#${id}b)"/>`;
-    for (let k = 0; k < 60; k++) { const col = Math.floor(rnd(k, 21) * 19), row = Math.floor(rnd(k, 22) * 13); const bx = 64 + col * 18 + (row % 2 ? 9 : 0) + 0.8, by = 74 + row * 6 + 0.4; if (bx > 392 || (bx > 286 && by < 90)) continue; s += `<rect x="${f1(bx)}" y="${f1(by)}" width="8" height="5" fill="${rnd(k, 23) < 0.6 ? "#df9ea6" : "#f2c4c9"}" opacity=".6"/>`; }
-    s += `<path d="M64 73.5H290V89.5H402" fill="none" stroke="#d9939c" stroke-width="1.6"/><rect x="64" y="74" width="338" height="76" fill="url(#${id}w)"/>`;
+    for (let k = 0; k < 60; k++) { const col = Math.floor(rnd(k, 21) * 19), row = Math.floor(rnd(k, 22) * 13); const bx = 64 + col * 18 + (row % 2 ? 9 : 0) + 0.8, by = 74 + row * 6 + 0.4; if (bx > 392 || (bx > 286 && by < 90)) continue; s += `<rect x="${f1(bx)}" y="${f1(by)}" width="8" height="5" fill="${rnd(k, 23) < 0.6 ? "#eebfc4" : "#f8e1e3"}" opacity=".55"/>`; }
+    s += `<path d="M64 73.5H290V89.5H402" fill="none" stroke="#e9b8be" stroke-width="1.6"/><rect x="64" y="74" width="338" height="76" fill="url(#${id}w)"/>`;
     // timber screen
-    s += `<rect x="-2" y="40" width="72" height="140" fill="#d8b3a8"/>`;
-    for (let x = 2; x < 70; x += 5) s += `<line x1="${x}" y1="40" x2="${x}" y2="180" stroke="#c79e93" stroke-width="1"/>`;
+    s += `<rect x="-2" y="40" width="72" height="140" fill="#eadbd4"/>`;
+    for (let x = 2; x < 70; x += 5) s += `<line x1="${x}" y1="40" x2="${x}" y2="180" stroke="#dccabf" stroke-width="1"/>`;
     s += `<rect x="-2" y="40" width="72" height="3" fill="#e6c6bd"/>`;
     // soil and future mounds
-    s += `<rect x="66" y="144" width="336" height="16" fill="#a8746e"/>`;
+    s += `<rect x="66" y="144" width="336" height="16" fill="#c9a49e"/>`;
     for (let i = upto; i < 30; i++) { const sl = ORDER[i]; if (sl % 2 === 0) { const x = 84 + (sl / 29) * 302; s += `<ellipse cx="${f1(x)}" cy="152" rx="4" ry="1.6" fill="#b98680"/>`; } }
     // plants: back row first
     const planted = []; for (let i = 0; i < Math.min(upto, 30); i++) planted.push({ i, slot: ORDER[i] });
@@ -197,7 +197,7 @@
     // concrete bed and lawn
     s += `<rect x="64" y="157" width="340" height="21" fill="url(#${id}c)"/><rect x="64" y="157" width="340" height="1.8" fill="#ffffff"/><rect x="64" y="157" width="2" height="21" fill="#fbf8f5"/>`;
     for (let k = 0; k < 26; k++) s += `<circle cx="${f1(70 + rnd(k, 31) * 330)}" cy="${f1(161 + rnd(k, 32) * 15)}" r=".55" fill="#cbbfb7" opacity=".7"/>`;
-    s += `<rect x="-2" y="177" width="406" height="25" fill="#cbd8b4"/><path d="M-2 177H404" stroke="#b5c69a" stroke-width="1.2"/>`;
+    s += `<rect x="-2" y="177" width="406" height="25" fill="#dfe8cf"/><path d="M-2 177H404" stroke="#b5c69a" stroke-width="1.2"/>`;
     for (let k = 0; k < 7; k++) s += `<ellipse cx="${f1(rnd(k, 41) * 400)}" cy="${f1(186 + rnd(k, 42) * 12)}" rx="${f1(14 + rnd(k, 43) * 20)}" ry="2.5" fill="#bccb9f" opacity=".6"/>`;
     return s + "</svg>";
   }

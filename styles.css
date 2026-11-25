@@ -468,3 +468,49 @@ textarea:focus, input:focus { background: rgba(255, 255, 255, .78); box-shadow: 
   .section, .belief, .daylist, .gardencard, .daycard, .flow-inner, .hero-in, .reveal-bg .reveal, .nav, .dlg, .entry, .stat, .tools button, .seg, .empty { background: rgba(255, 255, 255, .86); }
 }
 .nav { position: fixed; }
+
+
+/* ---------- More white ----------
+   White page, soft grey surfaces, no full-screen photo. Pink lives in the orb, the garden and the welcome image. */
+:root { --surface: #f5f5f7; --surface2: #efeff2; --line: #ececef; }
+body { background: #ffffff; }
+body::before, body::after { display: none; }
+.flow { background: #ffffff; }
+.section, .cta-block, .belief, .daylist, .gardencard, .garden-wide, .flow-inner, .hero-in, .reveal-bg .reveal, .dlg, .entry, .stat, .tools button, .seg, .empty, .letter, .envelope, .herb .card, .warn {
+  background: var(--surface); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; border: 0;
+}
+.section::before, .cta-block::before, .belief::before, .daylist::before, .gardencard::before, .garden-wide::before, .daycard::before, .flow-inner::before, .hero-in::before, .reveal-bg .reveal::before, .nav::before, .dlg::before, .entry::before, .stat::before, .tools button::before, .seg::before, .empty::before, .promo::before, .letter::before, .envelope::before, .herb .card::before, .warn::before, .chip::before, .option::before, .scale button::before, .daycard .panel::before { display: none; }
+.section.white, .letter, .report .section { background: #ffffff; box-shadow: inset 0 0 0 1px var(--line); }
+.flow-inner, .flow-inner:has(.lesson) { background: transparent; box-shadow: none; padding: 8px var(--pad) 28px; }
+.flow.moss .flow-inner { background: #1f1f21; border-radius: 30px; padding: var(--pad); }
+.daycard { background: #ffffff; box-shadow: 0 0 0 1px var(--line), 0 24px 50px -34px rgba(60, 20, 30, .28); }
+.daycard .panel { background: rgba(245, 245, 247, .8); box-shadow: none; }
+.daycard .orb { box-shadow: inset -12px -14px 34px rgba(170, 40, 80, .28), inset 10px 10px 26px rgba(255, 255, 255, .35); }
+.promo, .stat:first-child, .section.dark { background: #1f1f21; box-shadow: none; }
+.tools button { background: var(--surface); }
+.entry { background: var(--surface); }
+.chip, .option, .scale button, .stepper, textarea, input[type="text"], input[type="number"], input[type="search"], input[type="date"], input[type="time"], .btn.ghost, .btn.light, .flow-foot .link, .flow-top .x, .motifs button, .evidence {
+  background: var(--surface2); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none;
+}
+.section .chip, .section .option, .section .scale button, .section textarea, .section input[type="text"], .section input[type="number"], .section input[type="time"], .section .stepper, .section .btn.ghost { background: #ffffff; }
+.chip[aria-pressed="true"], .chip[aria-checked="true"], .option[aria-checked="true"], .option[aria-pressed="true"], .scale button[aria-checked="true"] { background: #1f1f21; color: #fff; box-shadow: none; }
+textarea:focus, input:focus { background: #ffffff; box-shadow: 0 0 0 2px #1f1f21; }
+.btn, .btn::after { box-shadow: none; }
+.nav { background: rgba(255, 255, 255, .9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 0 0 1px var(--line), 0 14px 30px -20px rgba(0, 0, 0, .25); }
+.nav a[aria-current="page"] { background: #1f1f21; color: #fff; box-shadow: none; }
+.nav a[aria-current="page"] svg { color: var(--rose2); }
+.crave-fab, .toast { background: #1f1f21; box-shadow: 0 12px 26px -14px rgba(0, 0, 0, .45); }
+.dlg-back { background: rgba(20, 20, 22, .22); }
+.dlg { background: #ffffff; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .35); }
+.meter, .bar .track { background: var(--surface2); }
+.dumb .line::before { background: var(--surface2); }
+.garden-bleed { background: var(--surface); box-shadow: none; }
+.gardencard .garden, .garden-wide .garden { box-shadow: none; }
+/* Welcome: the desert as one rounded picture, everything else on white */
+.hero { display: block; min-height: 0; padding: 4px 0 0; }
+.hero::before { content: ""; display: block; height: min(48vh, 420px); max-width: 600px; margin: 0 auto 6px; border-radius: 30px; background: #f2c9cd var(--bg) center 62% / cover no-repeat; }
+.hero-in { background: transparent; padding: 18px var(--pad) 8px; }
+.reveal-bg { display: block; min-height: 0; }
+.reveal-bg .reveal { background: transparent; padding: 8px var(--pad) 12px; }
+.reveal-bg .reveal .big { text-shadow: none; }
+@media (min-width: 900px) { .nav { background: #ffffff; } }
